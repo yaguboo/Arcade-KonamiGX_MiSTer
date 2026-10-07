@@ -1,0 +1,92 @@
+<misterromdescription>
+    <name>Gokujou Parodius - Kako no Eikou o Motomete (ver JAD)</name>
+    <setname>gokuparo</setname>
+    <rbf>KonamiGX</rbf>
+    <mameversion>0289</mameversion>
+    <year>1994</year>
+    <manufacturer>Konami</manufacturer>
+    <players>2</players>
+    <buttons names="Shot,Missile,C,-,-,-,Start,Coin,Pause" default="A,B,X,-,-,-,Start,Select,R" count="3"/>
+
+    <!-- The map= strings below are GENERATED, not written by hand, and
+         tools/build_rom.py assembles this document back into an image and
+         compares it byte for byte with the one it built from its own tables.
+         Three deliberate errors were injected to prove that check is armed: a
+         swapped 32-bit pair, a swapped 16-bit pair, and a missing region pad.
+         All three were caught.
+
+         WHAT IS STILL UNVERIFIED is the one thing that check cannot see: which
+         END of a map= string is the first output byte.  The emitter and the
+         checker share that constant, so they agree either way.  It is set from
+         the only hardware data point this factory has: Stadium Hero's
+         verified stadhero.mra, whose 16-bit map="01" is its EVEN byte.
+         Nothing here can strengthen it.
+
+         So: if the program runs but the graphics are garbage, suspect
+         MAP_LSB_LAST in tools/build_rom.py before suspecting the RTL, and use
+         releases/gokuparo_flat.mra for a run that has no map= in it at all.
+         The signatures to check either way are the reset SSP 00C20000 / PC
+         00000100 in the first eight bytes and 00C1F800 at 0x020000. -->
+
+    <rom index="0" zip="gokuparo.zip|fantjour.zip|konamigx.zip" md5="none">
+        <!-- bios @ 000000, 128 KB -->
+        <part name="300a01.34k" crc="d5fa95f5"/>
+        <!-- main @ 020000, 1024 KB -->
+        <interleave output="32">
+          <part name="321jad04.27b" crc="916a7951" map="0012"/>
+          <part name="321jad02.21b" crc="c2e548c0" map="1200"/>
+        </interleave>
+        <!-- snd @ 120000, 256 KB -->
+        <interleave output="16">
+          <part name="321b06.9c" crc="da810554" map="01"/>
+          <part name="321b07.7c" crc="c47634c0" map="10"/>
+        </interleave>
+        <!-- pad to 200000 -->
+        <part repeat="0xa0000">00</part>
+        <!-- tile4 @ 200000, 4096 KB -->
+        <part name="321b14.17h" crc="437d0057"/>
+        <part repeat="0x200000">00</part>
+        <!-- tile1 @ 600000, 2048 KB -->
+        <part name="321b12.13g" crc="5f9edfa0"/>
+        <part repeat="0x180000">00</part>
+        <!-- pcm @ 800000, 4096 KB -->
+        <part name="321b17.9g" crc="b3e8d5d8"/>
+        <part name="321b18.7g" crc="2c561ad0"/>
+        <!-- spr1 @ C00000, 2048 KB -->
+        <part name="321b09.30g" crc="94add237"/>
+        <part repeat="0x100000">00</part>
+        <!-- data @ E00000, 2048 KB -->
+        <part repeat="0x200000">00</part>
+        <!-- spr4 @ 1000000, 16384 KB -->
+        <interleave output="32">
+          <part name="321b11.25g" crc="c6e2e74d" map="0021"/>
+          <part name="321b10.28g" crc="ea9f8c48" map="2100"/>
+        </interleave>
+    </rom>
+
+    <!-- OSD defaults, read by KonamiGX.sv into hps_io's status_in.
+         bit 11 Video source (0 = test pattern), bit 12 Palette scale
+         (0 = x32, retired D5), bit 14 Pause CPU, bit 15 Pause when OSD
+         open (0 = On). -->
+    <rom index="1"><part>00 18 00</part></rom>
+
+    <!-- The 93C46's default contents.  128 bytes, ROM_REGION16_BE, so byte 2W
+         is the high half of EEPROM word W.  MAME calls this "default eeprom to
+         prevent game booting with error" (konamigx.cpp:2163) and it is not
+         optional.  integration/gx_download.sv puts it in the EEPROM, not in
+         SDRAM.  There is no write-back yet, so this is what every session
+         starts from. -->
+    <rom index="2" zip="gokuparo.zip|fantjour.zip|konamigx.zip" md5="none">
+        <part name="gokuparo.nv" crc="15c0f2d9"/>
+    </rom>
+
+    <!-- DIP switches.  SOURCE_AUDIT section 7: SW1:1 Sound Output defaults to
+         0 = Stereo and SW1:2 Flip Screen to 1 = Off.  SW1:1 is bit 0 and SW1:2
+         is bit 1, so the default byte is 1111_1110 = FE.  It was FD until
+         2026-09-14, which is Mono and Flip Screen ON.  Everything else is
+         PORT_DIPUNUSED. -->
+    <switches default="FE,FF" base="0">
+        <dip name="Sound Output" bits="0" ids="Stereo,Mono"/>
+        <dip name="Flip Screen" bits="1" ids="On,Off"/>
+    </switches>
+</misterromdescription>

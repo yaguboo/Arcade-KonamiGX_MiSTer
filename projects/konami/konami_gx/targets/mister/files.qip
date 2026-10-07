@@ -1,0 +1,117 @@
+# --------------------------------------------------------------------------
+# Konami System GX (Type 2) -- source list
+#
+# Add files here, never through the Quartus IDE (it rewrites the .qsf).
+# --------------------------------------------------------------------------
+
+# ---- MiSTer board wrapper -------------------------------------------------
+set_global_assignment -name SYSTEMVERILOG_FILE KonamiGX.sv
+set_global_assignment -name SDC_FILE KonamiGX.sdc
+
+# ---- PLL (retargeted to 96.000 MHz; see rtl/pll/pll_0002.v) ---------------
+set_global_assignment -name QIP_FILE rtl/pll.qip
+
+# ---- where gx_rommap.svh is found by `include ----------------------------
+set_global_assignment -name SEARCH_PATH ../../rtl
+# fx68k's $readmemb names microrom.mem and nanorom.mem with no path.
+set_global_assignment -name SEARCH_PATH ../../../../../third_party/cpu/fx68k
+
+# `include "sys/emu_ports.vh"` in KonamiGX.sv is the standard MiSTer form;
+# since 2026-09-15 sys/ is the shared platforms/mister/sys, so its parent is
+# on the search path (the same line stadium_hero's files.qip carries).
+set_global_assignment -name SEARCH_PATH ../../../../../platforms/mister
+
+# ---- 68EC020 main CPU (TG68K.C, LGPL-3.0, (c) Tobias Gubener) -------------
+# CPU="11" selects 68020: extended addressing, 32-bit MUL/DIV, bitfields, VBR.
+# docs/REUSE_PLAN.md section 1.  TG68K_Pack.vhd is a package and must precede
+# the units that use it.
+set_global_assignment -name VHDL_FILE ../../rtl/cpu/tg68k/TG68K_Pack.vhd
+set_global_assignment -name VHDL_FILE ../../rtl/cpu/tg68k/TG68K_ALU.vhd
+set_global_assignment -name VHDL_FILE ../../rtl/cpu/tg68k/TG68KdotC_Kernel.vhd
+
+# TG68K.vhd is the Amiga-style asynchronous bus wrapper and this core does NOT
+# use it -- gx_main.sv drives TG68KdotC_Kernel directly and holds clkena_in low
+# instead of reconstructing AS/DTACK only to consume it again.  Deliberately
+# not compiled: an unused top-level entity is dead logic the fitter still has
+# to read.
+# set_global_assignment -name VHDL_FILE ../../rtl/cpu/tg68k/TG68K.vhd
+
+# ---- K054338 mixer registers (jtcores, GPL-3.0, (c) Jose Tejada) ----------
+# third_party/video/jt054338/UPSTREAM.yml, docs/LICENSE_USAGE_REPORT.md.
+# Vendored byte-identical to upstream; the ALPHA_INV defect is worked around
+# in gx_colmix.sv, not patched here.
+set_global_assignment -name VERILOG_FILE ../../../../../third_party/video/jt054338/jt054338.v
+
+# ---- 93C46 EEPROM (jteeprom, GPL-3.0, (c) Jose Tejada) --------------------
+# third_party/peripheral/jt9346/UPSTREAM.yml, docs/LICENSE_USAGE_REPORT.md.
+# jt9346, NOT jt5911: this board is EEPROM_93C46_16BIT (64 x 16) and jt5911 is
+# the ER5911 (128 x 8) with one more address bit.  The file also declares
+# jt9346_dual_ram, which is why nothing else needs listing here.
+set_global_assignment -name VERILOG_FILE ../../../../../third_party/peripheral/jt9346/jt9346.v
+
+# ---- 68000 sound CPU (fx68k, GPLv3, (c) Jorge Cwik) -----------------------
+# Vendored with the dbg_d7 port, the same additive change power_spikes and
+# NA-1/NA-2 carry.  docs/LICENSE_USAGE_REPORT.md.  This is the SOUND CPU --
+# the main CPU is the 68EC020 above and is VHDL.
+set_global_assignment -name SYSTEMVERILOG_FILE ../../../../../third_party/cpu/fx68k/fx68kAlu.sv
+set_global_assignment -name SYSTEMVERILOG_FILE ../../../../../third_party/cpu/fx68k/uaddrPla.sv
+set_global_assignment -name SYSTEMVERILOG_FILE ../../../../../third_party/cpu/fx68k/fx68k.sv
+set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/cpu/gx_m68k.sv
+
+# ---- sound ----------------------------------------------------------------
+# gx_k054539 is the register file and timer; gx_k054539_pcm is the PCM engine
+# (no reverb ring -- its header says why) and includes gx_k054539_tab.svh from
+# its own directory; gx_k054539_fetch brings its sample bytes out of SDRAM.
+set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/sound/gx_k056800.sv
+set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/sound/gx_k054539.sv
+set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/sound/gx_k054539_pcm.sv
+set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/sound/gx_k054539_fetch.sv
+# gx_sndxm: both reverb rings (and the TMS57002's RAM) on the sxm port -> DDR3
+# in KonamiGX.sv (DECISIONS D16).  The "no reverb ring" note above is history.
+set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/sound/gx_sndxm.sv
+# gx_tms57002: the sound board's effects DSP; its program/coefficient/data
+# memories are MLAB on purpose (build.sh names the exception).
+set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/sound/gx_tms57002.sv
+# gx_sndtrace: DEBUG log of the sound CPU's TMS57002 host-port traffic, off by
+# default (OSD P1 "Sound trace"); KonamiGX.sv drains it into DDR3.
+set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/sound/gx_sndtrace.sv
+set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/sound/gx_sound.sv
+
+# ---- board ----------------------------------------------------------------
+set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/memory/gx_sdram.sv
+set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/memory/gx_memarb.sv
+set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/memory/gx_romcache.sv
+set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/memory/gx_cpucache.sv
+set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/memory/gx_sprfetch.sv
+set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/video/gx_ccu.sv
+set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/video/gx_xoffs.sv
+set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/video/gx_tilemap.sv
+set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/video/gx_palette.sv
+set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/video/gx_prio.sv
+set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/video/gx_colmix.sv
+# K053246/K055673 sprites.  gx_objscan and gx_objdraw are DERIVED from jtcores
+# jt053246_scan.sv and jtframe_draw.v (GPL-3.0-or-later, (c) Jose Tejada) and
+# say what they changed; docs/LICENSE_USAGE_REPORT.md.
+set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/video/gx_objscan.sv
+set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/video/gx_objdraw.sv
+set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/video/gx_sprite.sv
+set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/gx_decode.sv
+set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/gx_ctrl.sv
+set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/gx_xprot.sv
+set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/gx_int1arm.sv
+set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/gx_main.sv
+# the ESC -- Sexy Parodius's sprite list, MAME's way (DECISIONS D18)
+# gx_esc.sv (ESC_CORE=0 path, not instantiated) is not part of this release
+set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/esc/gx_esc056.sv
+set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/esc/esc_cpu.sv
+set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/esc/esc_host.sv
+set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/gx_fjdma.sv
+set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/gx_eestart.sv
+set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/gx_top.sv
+
+# ---- platform transport ---------------------------------------------------
+set_global_assignment -name SYSTEMVERILOG_FILE ../../integration/gx_download.sv
+
+# ---- not in this build ----------------------------------------------------
+# The TMS57002 DSP: gx_sound decodes its windows and acknowledges them, but
+# nothing implements it yet.  docs/REUSE_PLAN.md dependency item 3.

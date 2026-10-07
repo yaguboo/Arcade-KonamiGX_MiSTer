@@ -1,0 +1,403 @@
+# --------------------------------------------------------------------------
+#
+# Konami System GX (Type 2) -- MiSTer project
+#
+# WARNING WARNING WARNING:
+# Do not add files to project in Quartus IDE! It will mess this file!
+# Add the files manually to files.qip file.
+#
+# Most of this file is inherited from the Power Spikes lane, including two
+# settings that were paid for in crashed builds and are NOT to be turned back
+# on without re-measuring: the PHYSICAL_SYNTHESIS_* pair below.
+#
+# --------------------------------------------------------------------------
+
+set_global_assignment -name TOP_LEVEL_ENTITY sys_top
+set_global_assignment -name PARTITION_NETLIST_TYPE SOURCE -section_id Top
+set_global_assignment -name PARTITION_FITTER_PRESERVATION_LEVEL PLACEMENT_AND_ROUTING -section_id Top
+set_global_assignment -name PARTITION_COLOR 16764057 -section_id Top
+
+set_global_assignment -name LAST_QUARTUS_VERSION "17.0.0 Lite Edition"
+
+set_global_assignment -name GENERATE_RBF_FILE ON
+set_global_assignment -name PROJECT_OUTPUT_DIRECTORY output_files
+# FOUR, not ALL.  This is a 22-thread machine and three other projects' .qsf
+# files already ask for ALL; root CLAUDE.md section 11.1 serialises builds for
+# that reason among others, and this project's CLAUDE.md section 4 fixes the
+# number here.
+set_global_assignment -name NUM_PARALLEL_PROCESSORS 4
+set_global_assignment -name SAVE_DISK_SPACE OFF
+set_global_assignment -name SMART_RECOMPILE ON
+set_global_assignment -name MIN_CORE_JUNCTION_TEMP "-40"
+set_global_assignment -name MAX_CORE_JUNCTION_TEMP 100
+set_global_assignment -name POWER_PRESET_COOLING_SOLUTION "23 MM HEAT SINK WITH 200 LFPM AIRFLOW"
+set_global_assignment -name POWER_BOARD_THERMAL_MODEL "NONE (CONSERVATIVE)"
+set_global_assignment -name TIMEQUEST_MULTICORNER_ANALYSIS OFF
+set_global_assignment -name OPTIMIZE_POWER_DURING_FITTING OFF
+set_global_assignment -name FINAL_PLACEMENT_OPTIMIZATION ALWAYS
+# Tried "AUTO FIT" to shorten the build; quartus_fit 17.0 then died with an
+# access violation in sta_find_duplicates_of_deleted_net_name during physical
+# synthesis.  Not worth chasing -- the build-time win came from the two
+# MISTER_DISABLE macros below instead (synthesis 2:55 -> 1:25).
+set_global_assignment -name FITTER_EFFORT "STANDARD FIT"
+set_global_assignment -name OPTIMIZATION_MODE "HIGH PERFORMANCE EFFORT"
+set_global_assignment -name ALLOW_POWER_UP_DONT_CARE ON
+set_global_assignment -name QII_AUTO_PACKED_REGISTERS NORMAL
+set_global_assignment -name ROUTER_LCELL_INSERTION_AND_LOGIC_DUPLICATION ON
+set_global_assignment -name PHYSICAL_SYNTHESIS_COMBO_LOGIC OFF
+# Physical synthesis turned OFF 2026-08-22, all of it.
+#
+# Quartus 17.0's fitter dies with an access violation inside
+# sta_find_duplicates_of_deleted_net_name immediately after the physical
+# synthesis passes run -- STA then walks nets those passes deleted.  It was
+# intermittent for months; this session's diagnostic registers made it
+# reliable, and it kept crashing at the same point with
+# PHYSICAL_SYNTHESIS_REGISTER_DUPLICATION already off.  Five crashes in a row.
+#
+# The core clock had +2.7 ns of slack with these on, so the optimisation is
+# affordable, and build.sh now fails the build if End-trace appears rather than
+# leaving a stale .rbf looking finished.  Turn them back on and re-measure if a
+# later Quartus is ever used.
+# Turned OFF 2026-08-22.  Quartus 17.0's fitter dies with an access violation
+# in sta_find_duplicates_of_deleted_net_name immediately after physical
+# synthesis reports "Created N register duplicates" -- STA then walks nets that
+# the duplication pass deleted.  It was intermittent for months and became
+# reliable once this session's diagnostic registers pushed the duplicate count
+# up (188 on the failing run).  Three retries in a row crashed at the same
+# point, so "just run it again" (KNOWN_ISSUES.md lesson 11) has stopped being
+# the answer.  Timing has ~3.7 ns of slack on the core clock, so the lost
+# optimisation is affordable; check_pll and the Setup Summary still gate it.
+set_global_assignment -name PHYSICAL_SYNTHESIS_REGISTER_DUPLICATION OFF
+set_global_assignment -name PHYSICAL_SYNTHESIS_REGISTER_RETIMING OFF
+set_global_assignment -name OPTIMIZATION_TECHNIQUE SPEED
+set_global_assignment -name MUX_RESTRUCTURE ON
+set_global_assignment -name REMOVE_REDUNDANT_LOGIC_CELLS ON
+set_global_assignment -name AUTO_DELAY_CHAINS_FOR_HIGH_FANOUT_INPUT_PINS ON
+set_global_assignment -name PHYSICAL_SYNTHESIS_COMBO_LOGIC_FOR_AREA OFF
+set_global_assignment -name ADV_NETLIST_OPT_SYNTH_WYSIWYG_REMAP ON
+set_global_assignment -name SYNTH_GATED_CLOCK_CONVERSION ON
+set_global_assignment -name PRE_MAPPING_RESYNTHESIS ON
+set_global_assignment -name ROUTER_CLOCKING_TOPOLOGY_ANALYSIS ON
+set_global_assignment -name ECO_OPTIMIZE_TIMING ON
+set_global_assignment -name PERIPHERY_TO_CORE_PLACEMENT_AND_ROUTING_OPTIMIZATION ON
+set_global_assignment -name PHYSICAL_SYNTHESIS_ASYNCHRONOUS_SIGNAL_PIPELINING OFF
+set_global_assignment -name ALM_REGISTER_PACKING_EFFORT MEDIUM
+# SEED.  Inherited from the sibling lane as a starting point, NOT a measured
+# optimum for this design.  Quartus is deterministic: identical sources and
+# seed give an identical fit, so re-running an unchanged build that missed
+# timing gives the same miss -- changing the seed is what re-rolls the
+# placement.  The sibling's long note about which seeds worked for IT has
+# deliberately not been copied; it is evidence about a different design.
+# SEED.  2026-09-07: the design's last failing path is
+#     gx_sdram|dout[11] -> TG68KdotC_Kernel|opcode[3]     slack -0.365
+# with TNS -5.035, i.e. that path and almost nothing else.  It is the read-data
+# return, a genuine single-cycle requirement that no exception can relax, and
+# 0.365 ns of it is placement rather than logic -- this clock has read anywhere
+# from -0.044 to +0.720 across builds of the same RTL (see build.sh).
+#
+# So this is a reseed, and it is luck rather than a fix.  If it does not hold
+# across seeds, the structural answer is to register the arbiter's dout AND
+# ack together by one clock before gx_main sees them -- one more clock per CPU
+# fetch, and the handshake stays coherent because both move on the same edge.
+# Back to 11: seed 3 measured WORSE (-0.769 against -0.365), and the path it
+# was chasing is fixed structurally now -- see the read-return register in
+# rtl/gx_top.sv.  Two seeds failing was the evidence that a reseed was the
+# wrong tool.
+#
+# SEED.  2026-09-08: seed 11 met timing at +0.372 and then, with the EEPROM
+# added, missed it at -0.214.  MEASURED before touching anything, because the
+# obvious suspect -- the two address comparators added to gx_palette and
+# gx_tilemap that morning -- is not on the path at all:
+#
+#     TG68KdotC_Kernel|regfile ram_block1a0 (portbdataout[9])
+#       -> 8 logic levels -> gx_main|skipFetch          slack -0.214
+#
+# and all five worst paths are that same one.  Two things in the detail say
+# this is placement rather than structure:
+#
+#     Clock skew   -2.371 ns of the 10.417 ns period, because the register
+#                  file's M10K sits at X26_Y30 with a 4.719 ns clock leg
+#     Data delay    8.060 ns over 8 levels and 16 interconnect hops
+#
+# No exception can help it.  The launch is the CPU's register file read port,
+# which moves on `cen`, and the capture is gx_main's slice, which moves on
+# `cen_d1` -- exactly ONE clock later, by construction and on purpose (the
+# slice waits a clock precisely so the kernel's combinational outputs have
+# settled).  A multicycle here would be a false one, and this board has no way
+# to simulate the CPU that would catch it.
+#
+# So: a reseed, and it is a lottery ticket rather than a fix -- said plainly
+# because the paragraph above this one is about a reseed that did not work.
+# 7 is arbitrary; 11 and 3 are the two already spent.  If this does not hold,
+# the structural answer is to move the slice to `cen_d2`, which buys this
+# direction a clock by taking one from the slice-back-into-the-CPU exception
+# (currently -setup 3, which would become 2) -- a trade, not a win, and it
+# perturbs the one part of this board that cannot be simulated.  Measure both
+# directions before taking it.
+# SEED.  2026-09-08, after the arbiter reset fix (one wire, 17 ALMs): -0.469,
+# and the path is back to the seed-11 one --
+#
+#     TG68K|regfile ram_block1a0 -> 8 levels -> gx_main|skipFetch
+#
+# all five worst paths, same endpoint.  What that path has done on this design:
+#
+#     seed 11 + EEPROM                 -0.214   (this path)
+#     seed 7  + EEPROM                 >= -0.059 (a different path was worst)
+#     seed 7  + wram addr duplicate    >= +0.237 (met; a different path worst)
+#     seed 7  + the arbiter wire       -0.469   (this path again)
+#
+# So it is not seed-determined, it is NETLIST-determined: any edit reshuffles
+# placement and this path lands anywhere in a 0.7 ns band.  Its detail says
+# why -- 8 logic levels AND 2.371 ns of clock skew, because the register
+# file's M10K gets a long clock leg wherever the fitter happens to put it.
+#
+# This is NOT the situation the note above warns about.  That one was two
+# seeds on the SAME netlist.  This netlist has been built exactly once, and a
+# netlist one wire away from it met timing at +0.237, so another seed here is
+# a new data point rather than a repeated one.
+#
+# If this fails too, stop reseeding.  The structural answer is to move
+# gx_main's bus slice from cen_d1 to cen_d2, which makes this path two clocks
+# instead of one and costs the slice->TG68K exception a clock (-setup 3 -> 2).
+# The arithmetic on both directions is comfortable -- each needs about 11 ns
+# and would have 20.8 -- but it perturbs CPU bus timing on the one module
+# this factory cannot simulate, and it should NOT be made in the same build as
+# a fix that has not been on hardware yet.  One unverified change at a time.
+#
+# SEED.  2026-09-15, b0b7fee (a 2-bit compare on gx_prio's shadow enable):
+# -0.146 on ONE endpoint (End Point TNS = the worst slack), and not the
+# changed logic at all:
+#
+#     gx_sdram|dq_in[8] -> gx_sprfetch|data1[0]       -0.146
+#     gx_sdram|dq_in[11] -> gx_sprfetch|data1[3]      +0.186
+#
+# the sprite fetcher's raw SDRAM capture, which has read -0.045 (12eb5c5) and
+# +0.070 (c4c694b) on other netlists -- the class Codex called a ~6 ns route
+# re-solved by every netlist (MEASUREMENTS 38).  Registering it is the
+# structural fix and costs sprite lines a clock (MEASUREMENTS 45 measured that
+# on the registered tier), so it is not made to rescue one endpoint.
+# A plain re-run of build.sh does NOT re-roll anything: SMART_RECOMPILE is on,
+# the sources were unchanged, and the second run left the first run's reports
+# and RBF untouched (the same 17:53 fit, the same sha 05f8d6d5).  So: seed 9,
+# a first data point on this netlist.  If it fails, stop reseeding and take the
+# path to an advisor with the registered-tier measurement.
+# SEED.  2026-09-21, after the P1 mailbox log and the gx_prio field-2 fix.
+# TWO NETLISTS FAILED ON SEED 9 and the seed had not been re-rolled once:
+#
+#     3da75ac   -0.951   gx_main|cpu_a32[19] -> gx_fjdma|hi_r[3]
+#     6e1d4d1   -0.165   gx_main|cpu_a32[19] -> gx_fjdma|hi_r[10]
+#                        and then -0.084 / -0.075 in gx_tilemap's scroll
+#                        registers, -0.029 in ascal.  A SPREAD, not one path.
+#
+# The fjdma endpoint is D19's own -- that device went -1.202 -> -0.133 -> +0.060
+# by registering everything gx_main sends it -- and the read side (bus_rdata,
+# which is where cpu_a32 gets in) is the half that was not registered.  That is
+# the structural answer if this does not hold: one clock on the DMA's read
+# return, paid by tb_gx_fjdma and tb_gx_fjbus, which cover it.
+#
+# But build.sh's own rule says a reseed first and a structural fix only for a
+# path that keeps failing ACROSS SEEDS, and across seeds is exactly what has
+# not been tried here.  5 is arbitrary; 11, 3 and 7 were spent in 2026-09-07/08
+# on a different netlist era and 9 is what just failed twice.
+# SEED.  2026-09-21, back to 9 with the borrowed-master exception in the .sdc.
+# Seed 5 was the reseed that showed the reseed was the wrong tool: it moved the
+# failing endpoint (gx_esc instead of gx_fjdma) and added one that is NOT in
+# this family -- objram_addr_d -> TG68K|result_div, a genuine single-cycle
+# response path that no client exception touches.  Seed 9's failures were the
+# family alone, so it is the seed that tests the fix.
+# SEED.  2026-09-22, after D22's sprite-slot probe (+84 ALMs, all of it in the
+# object DMA at vblank).  Seed 9 missed at -0.571 with TNS -3.717, and the
+# failing path is one this design has NOT failed on before:
+#
+#     gx_sound|gx_m68k|fx68k|excUnit|aob[5]
+#       -> gx_sound|altsyncram:sram[0][15]|...|porta_address_reg4
+#
+# all five worst paths being that same address bus into the sound work RAM.
+# Nothing in D22 is on it -- the change is 84 ALMs in a vblank-time FSM in
+# gx_sprite -- so this is the placement band this design has shown over and
+# over (section 70's six builds, +0.097 to -0.951 on changes that touched
+# nothing on the failing bus).
+#
+# A FIRST failure on a path is a reseed; a path that fails ACROSS seeds is the
+# structural one.  If this comes back on 3 as well, the structural question is
+# whether the sound CPU's address into its RAM deserves an exception the way
+# the borrowed masters did -- fx68k advances on an enable, so a spurious
+# capture may be impossible there too, and that argument has to be read out of
+# gx_m68k and gx_sound before it is written into the .sdc, not after.
+# SEED.  2026-09-23, after H1's grp_tok_sel (MEASUREMENTS 113.3: one new
+# 2-bit input, a 4-way mux on a 3-bit load value, and one OSD line -- the
+# smallest change this lane has reseeded for).  Seed 3 missed at -0.082 core
+# and -0.039 HDMI, and the endpoints are a family this design has NEVER failed
+# on:
+#
+#     emu|pll|...|general[0].gpll~PLL_OUTPUT_COUNTER|divclk        -0.082
+#     pll_hdmi|...|counter[0].output_counter|divclk                -0.039
+#
+# Both are inside the PLL megafunctions' own output counters, not in any path
+# the change touches -- grp_tok is loaded at a tile group edge and read by one
+# AND.  That is the placement band this file documents above (section 70's six
+# builds, +0.097 to -0.951 on changes that touched nothing on the failing bus),
+# and by this file's own rule a FIRST failure on a path is a reseed.
+#
+# 12 because 11, 9, 7, 5 and 3 are spent.  If the PLL counters come back on 12
+# the question stops being placement and becomes whether these megafunction
+# internals should be cut at all -- which is read out of the .sdc before it is
+# written into it, not after.
+# SEED.  2026-09-23, same change, second miss -- and the first note above was
+# reading the wrong thing.  build.sh prints the CLOCK of the failing path, not
+# its endpoints, so "both seeds failed on PLL_OUTPUT_COUNTER|divclk" said only
+# "both failed in that clock domain".  tools/worst_paths.sh on seed 12 names
+# them:
+#
+#   -0.272  ascal|o_vcpt_pre3[1] -> o_vcpt_pre3[0/3/5]
+#   -0.104  gx_tilemap|vram_h...PORT_B_WRITE_ENABLE_REG -> gx_tilemap|lscr_xo[1][14]
+#   -0.097  the same into lscr_xo[0][14]
+#
+# The WORST is inside ASCAL, the framework's scaler in platforms/mister/sys --
+# not this lane's code and not on anything grp_tok_sel touches.  The core-clock
+# pair is gx_tilemap's line-scroll register taking the VRAM write enable.
+#
+# So this is NOT yet "a path that fails across seeds": seed 3's endpoints were
+# never named, and the two magnitudes differ (-0.082/-0.039 against
+# -0.104/-0.272).  Two points on two fits of a design this file has already
+# measured swinging +0.097 to -0.951 on unrelated changes is a THIRD SEED, not
+# a structural verdict.  1 is untouched in this lane's history.
+#
+# If 1 also misses, NAME THE ENDPOINTS AGAIN before touching the .sdc: an ascal
+# path and a gx_tilemap path are two different questions and only one is ours.
+# SEED.  2026-09-23, GRP_TOK 3 -> 4 plus gx_sprfetch's CWA fix.  Seed 1 missed
+# at -0.355 ns, and worst_paths.sh names the family:
+#
+#     gx_main|cpu_a32[15] -> gx_tilemap|vram_l...ram_block1a39~porta_we_reg
+#     and four more of the same shape into vram_l and vram_h
+#
+# **THIS IS THE SECOND TIME A gx_tilemap VRAM CONTROL PATH HAS FAILED** -- the
+# seed-12 build was vram_h's write enable into lscr_xo.  That memory is 136
+# M10K (MEASUREMENTS 89), the largest object on the die and spread across it,
+# so one CPU address bit reaching every block's write enable is a genuine
+# high-fanout structure rather than a placement accident.
+#
+# Reseeding once more because the ENDPOINTS differ (write enable of the data
+# array now, of the line-scroll register before) and this file's rule is that
+# a first failure on a path is a reseed.  **If a cpu_a32 -> vram we path comes
+# back on 2, stop reseeding**: the answer is a register stage on the CPU's
+# VRAM write decode inside gx_tilemap, and that is an RTL change to a verified
+# path, so it needs the regression first (root CLAUDE.md 7).
+#
+# 2 because 11, 9, 7, 5, 3, 12 and 1 are spent.
+# SEED.  2026-09-29, 7b2a5705 (the DDR3 master's reset, ~30 registers): seed 2
+# missed by -0.059 inside gx_tms57002 (pmem -> cmem dataout), a path the change
+# does not touch.  A reseed, not a fix.
+# Seed 5: -0.477, gx_main cpu_a32[23] -> gx_memarb l_addr (the path this file
+# has watched swing across seeds before).  Seed 9 next.
+# SEED.  2026-09-30, e1c2eee2 (the ESC programs for salmndr2 / dragoonj, three
+# sprite ROM formats, 6 bpp tiles, the EEPROM start bit): seed 9 missed by
+# -0.117 on one path, tilemap VRAM -> rom1_addr (the tile row index, widened
+# to 20 bits by this change).  First failure there: a reseed.  6 is unused.
+# Seed 6 on 44bbf038 (+ IRQ3): -0.180 inside gx_tms57002 (s_write -> wa_r), a
+# path this work does not touch; the failing path moves every netlist
+# (-0.084 esc, -0.300 cpu_a32 -> vram, -0.117 vram -> rom1_addr, now this).
+# A placement band.  4 is unused.
+# SEED.  2026-10-01, 80f5c9b8 (gx_colmix: the blend's back gets its own brightness
+# preset, three 8x8 scalers; gx_prio +2 registers).  Seed 4 missed by -0.610,
+# TNS -24.7, and worst_paths.sh names paths the change does not touch:
+#   -0.610  gx_main cpu_a32[22] -> gx_tilemap vram_h porta_we_reg
+#   -0.499  cfg_machine[0] -> gx_esc rd_a[21]
+#   -0.491  gx_sound fx68k rFC[2] -> sound sram we
+# The cpu_a32 -> vram we family is the one the 2026-09-23 note watched.  Seed 8
+# (never used).  If cpu_a32 -> vram we is worst again, stop reseeding and
+# register the CPU's VRAM write (the structural answer that note names).
+# SEED.  2026-10-01, seed 8 met on 55cdc5d2 (+0.101).  0f1eddff (the Voice boost:
+# two FSM states and two constant multipliers in the K054539 engine) missed on
+# seed 8 by -0.196, TNS -1.216: gx_main cpu_a32[17] -> gx_memarb l_addr, the
+# family the 2026-09-29 note saw swing across seeds.  Seed 10 (never used).  If
+# this family is worst again, stop reseeding: register the CPU address into the
+# arbiter (an ARCHITECTURE change -- ask first).
+# SEED.  2026-10-01, 672ee8eb: the timing band's structural answer.  Seeds 4
+# (80f5c9b8, -0.610 cpu_a32 -> tilemap vram we) and 8 (0f1eddff, -0.196
+# cpu_a32 -> memarb l_addr) were the band returning through gx_decode, so the
+# selects are now registered on the slice's own cen_d2 edge (gx_main dsel_r,
+# MEASUREMENTS 163).  Seed 10 kept: +0.020 core, +0.070 HDMI, TNS 0.  If the
+# band comes back it is no longer the decode -- read worst_paths.sh first.
+# SEED.  2026-10-01, 79cd7f61 (D26 arm + D28 CACR gate) seed 10: -0.501 on
+# cfg_machine -> memarb l_addr, a load-time constant -- closed in the .sdc
+# (25ae2baf), not here.  The re-fit with that exception met setup (+0.060) but
+# HOLD missed: -0.072, TNS -1.44, gx_tms57002 d0_wa -> dmem0 MLAB address, a
+# path neither change touches (162.1 had hold all positive).  build.sh did not
+# check hold until now.  Seed 8 (met on 55cdc5d2; first try on this netlist).
+# SEED.  2026-10-01, ae933aa9 seed 8: hold met (+0.239) but setup -0.307, TNS
+# -1.065, gx_sprfetch cmem_a M10K -> data1 -- a third untouched path on a third
+# fit of this netlist (cfg_machine, tms57002 hold, now sprfetch).  Each fails
+# somewhere else: a placement band on a chip at 552/553 RAM blocks, not a
+# path to fix.  Seed 11.
+# SEED.  2026-10-02, the ESC chip core (D31), seed 11 on four netlists: the
+# core's own paths first (iw -> f_new, lmem -> f_new: fixed in esc_cpu by
+# registering the decode and the local operand), then untouched ones --
+# c2b77718 -0.064 gx_sprite lbuf, 905d2ffd -0.092 tilemap vram_h -> rom1_addr.
+# A new path per netlist at RAM 535/553: a placement band.  Seed 8.
+# SEED.  2026-10-02, 093af169 seed 8: -0.200 gx_sprfetch cmem_a -> data1 -- the
+# path seed 8 also missed on ae933aa9 (-0.307).  Untouched by D31; the ESC core's
+# own paths are closed (iw/x_sz/lmem -> f_new fixed in esc_cpu).  Seed 10.
+# SEED.  2026-10-02, 5e4c318f seed 10: HDMI -0.245 ascal o_vpix_inner -> o_poly_lum
+# (the framework scaler's adaptive-scanline path; 086afdec missed there too, 26f48152
+# and bcf30cbc met it on the same seed), core -0.009.  A band.  Seed 4.
+# SEED.  2026-10-03, f2327142 (gx_xoffs: X offsets from the CCU) seed 4: -0.148
+# tilemap vram_h -> rom1_addr (untouched; the same band as 905d2ffd seed 11).  Seed 10.
+# SEED.  2026-10-03, seed 10 on the same netlist: -0.108, the SAME path (vram_h ->
+# rom1_addr[12], a straight M10K q bit, no logic between).  User: one more seed.  Seed 5.
+# SEED.  2026-10-03, seed 5: -0.276 objram_addr_d -> TG68K regfile we (untouched;
+# the tilemap path met).  A different path per seed: a band.  Seed 12.
+# SEED.  2026-10-03, seed 12: -0.006 gx_tms57002 s_update -> wa_r[46] (untouched).
+# Four seeds, three different untouched paths.  Seed 9.
+# SEED.  2026-10-05, e59f7976 (winspike) seed 9: -0.355 tilemap vram_l -> rom1_addr / attr_w
+# (the fourth netlist on that path; 57678d63 seed 9 missed on tms57002).  Seed 10.
+# SEED.  2026-10-05, winspike netlists on seed 10: 63624628 -0.254 objdraw shadow pen,
+# e8266ee6 -0.193 sprfetch data1, 5d6da0d6 -0.152 obj_fmt (all three fixed in RTL); f31be535
+# -0.240 on untouched paths only (gp_outr -> HDMI_PR, objram_addr -> TG68K div).  Seed 9.
+# SEED.  2026-10-05, 08b5cf1f seed 9: -0.152 gx_tms57002 s_write -> qadr (untouched).  Seed 12.
+# SEED.  2026-10-05, a0893c35 seed 12: core -0.017 ns (TNS -0.027), HDMI +0.205, hold +0.241 --
+# the closest of the winspike netlists.  Next: another seed (not run: memory pressure).
+# SEED.  2026-10-05, user: timing first.  Seed 4 (15882e91 met on it): c86d87c4 MET,
+# core +0.062, HDMI +0.356, hold +0.193, TNS 0, RAM 521/553, map warnings 106.
+set_global_assignment -name SEED 4
+
+# No MISTER_FB here.  Gokujou Parodius is horizontal (MAME rotate=0), so
+# nothing rotates, so there is no DDR framebuffer and the FB_* ports are tied
+# off in KonamiGX.sv.  NA-1/NA-2 needs it for its two vertical games; copying
+# that line over would cost resources for a path this core never takes.
+
+#enable it only if 8bit indexed mode is used in core
+#set_global_assignment -name VERILOG_MACRO "MISTER_FB_PALETTE=1"
+
+#do not enable DEBUG_NOHDMI in release!
+#set_global_assignment -name VERILOG_MACRO "MISTER_DEBUG_NOHDMI=1"
+
+# disable bilinear filtering when downscaling
+#set_global_assignment -name VERILOG_MACRO "MISTER_DOWNSCALE_NN=1"
+
+# disable adaptive scanline filtering
+#set_global_assignment -name VERILOG_MACRO "MISTER_DISABLE_ADAPTIVE=1"
+
+#use only 1MB per frame for scaler to free ~21MB DDR3 RAM
+#set_global_assignment -name VERILOG_MACRO "MISTER_SMALL_VBUF=1"
+
+# Disable YC / Composite output to save some resources
+# Neither is used by this core, and leaving them out makes the build faster and
+# the fit easier.
+set_global_assignment -name VERILOG_MACRO "MISTER_DISABLE_YC=1"
+
+# Disable ALSA audio output to save some resources
+set_global_assignment -name VERILOG_MACRO "MISTER_DISABLE_ALSA=1"
+
+source ../../../../../platforms/mister/sys/sys.tcl
+source ../../../../../platforms/mister/sys/sys_analog.tcl
+source files.qip
+set_instance_assignment -name PARTITION_HIERARCHY root_partition -to | -section_id Top
+
+# Framework shift taps as registers, not M10K (2026-10-02, docs/BRAM_AUDIT.md 3):
+# shadowmask 4x81 (3 blocks), ascal o_vpix_inner 4x24 (1), vga_out 3x31 (1).
+# Tiny delay lines a whole block each; flip-flops cost ~500.  The sys/ files
+# are shared by other lanes, so this is an assignment here, not an edit there.
+set_instance_assignment -name AUTO_SHIFT_REGISTER_RECOGNITION OFF -to "shadowmask:HDMI_shadowmask"
+set_instance_assignment -name AUTO_SHIFT_REGISTER_RECOGNITION OFF -to "ascal:ascal"
+set_instance_assignment -name AUTO_SHIFT_REGISTER_RECOGNITION OFF -to "vga_out:vga_scaler_out"

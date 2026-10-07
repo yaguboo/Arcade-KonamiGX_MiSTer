@@ -1,0 +1,102 @@
+<misterromdescription>
+    <name>Magical Twin Bee (ver EAA)</name>
+    <setname>mtwinbee</setname>
+    <rbf>KonamiGX</rbf>
+    <mameversion>0289</mameversion>
+    <year>1995</year>
+    <manufacturer>Konami</manufacturer>
+    <players>2</players>
+    <buttons names="Shot,Missile,C,-,-,-,Start,Coin,Pause" default="A,B,X,-,-,-,Start,Select,R" count="3"/>
+
+    <!-- The map= strings below are GENERATED, not written by hand, and
+         tools/build_rom.py assembles this document back into an image and
+         compares it byte for byte with the one it built from its own tables.
+         Three deliberate errors were injected to prove that check is armed: a
+         swapped 32-bit pair, a swapped 16-bit pair, and a missing region pad.
+         All three were caught.
+
+         WHAT IS STILL UNVERIFIED is the one thing that check cannot see: which
+         END of a map= string is the first output byte.  The emitter and the
+         checker share that constant, so they agree either way.  It is set from
+         the only hardware data point this factory has: Stadium Hero's
+         verified stadhero.mra, whose 16-bit map="01" is its EVEN byte.
+         Nothing here can strengthen it.
+
+         So: if the program runs but the graphics are garbage, suspect
+         MAP_LSB_LAST in tools/build_rom.py before suspecting the RTL, and use
+         releases/mtwinbee_flat.mra for a run that has no map= in it at all.
+         The signatures to check either way are the reset SSP 00C20000 / PC
+         00000100 in the first eight bytes and 00C1F800 at 0x020000. -->
+
+    <rom index="0" zip="mtwinbee.zip|tbyahhoo.zip|konamigx.zip" md5="none">
+        <!-- bios @ 000000, 128 KB -->
+        <part name="300a01.34k" crc="d5fa95f5"/>
+        <!-- main @ 020000, 1024 KB -->
+        <interleave output="32">
+          <part name="424eaa04.27b" crc="f42d3139" map="0012"/>
+          <part name="424eaa02.31b" crc="34659905" map="1200"/>
+        </interleave>
+        <!-- snd @ 120000, 256 KB -->
+        <interleave output="16">
+          <part name="424a06.9c" crc="a4760e14" map="01"/>
+          <part name="424a07.7c" crc="fa90d7e2" map="10"/>
+        </interleave>
+        <!-- pad to 200000 -->
+        <part repeat="0xa0000">00</part>
+        <!-- tile4 @ 200000, 4096 KB -->
+        <part name="424a14.17h" crc="b1d9fce8"/>
+        <part repeat="0x200000">00</part>
+        <!-- tile1 @ 600000, 2048 KB -->
+        <part name="424a12.13g" crc="7f9cb8b1"/>
+        <part repeat="0x180000">00</part>
+        <!-- pcm @ 800000, 4096 KB -->
+        <part name="424a17.9g" crc="e9dd9692"/>
+        <part name="424a18.7g" crc="0f0d9f3a"/>
+        <!-- spr1 @ C00000, 2048 KB -->
+        <part name="424a09.30g" crc="daa07224"/>
+        <part repeat="0x100000">00</part>
+        <!-- data @ E00000, 2048 KB -->
+        <part repeat="0x200000">00</part>
+        <!-- spr4 @ 1000000, 16384 KB -->
+        <interleave output="32">
+          <part name="424a11.25g" crc="29592688" map="0021"/>
+          <part name="424a10.28g" crc="cf24e5e3" map="2100"/>
+        </interleave>
+    </rom>
+
+    <!-- OSD defaults, read by KonamiGX.sv into hps_io's status_in.
+         bit 11 Video source (0 = test pattern), bit 12 Palette scale
+         (0 = x32, retired D5), bit 14 Pause CPU, bit 15 Pause when OSD
+         open (0 = On). -->
+    <!-- Byte 3 is board configuration, read by KonamiGX.sv: WHICH
+         MACHINE MAME's init_konamigx builds (konamigx.cpp:4120-4166).
+           1 = sexyparo (special 4): the ESC builds the sprite list and
+               the K055673 offset is -42 (:1818-1825)
+           2 = fantjour (special 9): the fill / XOR-copy device at
+               0xdb0000 (konamigx_m.cpp:489-538; DECISIONS D19,
+               MEASUREMENTS 57: without it this set draws nothing)
+           3 = tbyahhoo (special 8) and 4 = daiskiss (special 5): one
+               ESC call for both, generate_sprites(0xc00000, 0xd20000,
+               0x100), and the base machine's sprite offset -26 (:1772) -->
+    <rom index="1"><part>00 18 00 03</part></rom>
+
+    <!-- The 93C46's default contents.  128 bytes, ROM_REGION16_BE, so byte 2W
+         is the high half of EEPROM word W.  MAME calls this "default eeprom to
+         prevent game booting with error" (konamigx.cpp:2163) and it is not
+         optional.  integration/gx_download.sv puts it in the EEPROM, not in
+         SDRAM.  There is no write-back yet, so this is what every session
+         starts from. -->
+    <rom index="2" zip="mtwinbee.zip|tbyahhoo.zip|konamigx.zip" md5="none">
+        <part name="mtwinbee.nv" crc="942b4323"/>
+    </rom>
+
+    <!-- DIP switches.  SOURCE_AUDIT section 7: SW1:1 Sound Output defaults to
+         0 = Stereo and SW1:2 Flip Screen to 1 = Off.  SW1:1 is bit 0 and SW1:2
+         is bit 1, so the default byte is 1111_1110 = FE.  It was FD until
+         2026-09-14, which is Mono and Flip Screen ON.  Everything else is
+         PORT_DIPUNUSED. -->
+    <switches default="FE,FF" base="0">
+        <dip name="Sound Output" bits="0" ids="Stereo,Mono"/>
+        <dip name="Flip Screen" bits="1" ids="On,Off"/>
+    </switches>
+</misterromdescription>
