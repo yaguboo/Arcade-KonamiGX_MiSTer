@@ -359,7 +359,20 @@ set_global_assignment -name ALM_REGISTER_PACKING_EFFORT MEDIUM
 # the closest of the winspike netlists.  Next: another seed (not run: memory pressure).
 # SEED.  2026-10-05, user: timing first.  Seed 4 (15882e91 met on it): c86d87c4 MET,
 # core +0.062, HDMI +0.356, hold +0.193, TNS 0, RAM 521/553, map warnings 106.
-set_global_assignment -name SEED 4
+# SEED.  2026-10-08, 94727eaf (the .mra-defaults gate: one ~|status[127:1] in the
+# wrapper) seed 4: core -0.058, worst path gp_outr[17] -> HDMI_PR (framework output,
+# untouched -- the same pair f31be535 missed on).  A band.  Seed 10.
+# SEED.  2026-10-08, same netlist seed 10: -0.423 tilemap vram_l -> rom1_addr[9], then
+# objdraw sacc -> lbuf we (both known band paths, untouched).  Seed 12.
+# SEED.  2026-10-08, same netlist seed 12: -0.697 objram_addr_d -> TG68K rot_cnt (known band, untouched).  Seed 9.
+# SEED.  2026-10-08, same netlist seed 9: slack -0.068  -0.068 gx_main:u_main|cpu_a32[9]  -> gx_xprot:u_xprot|bus_din[1] .  Seed 8.
+# SEED.  2026-10-08, same netlist seed 8: slack -0.130  -0.130 objram_addr_d[3]  -> gx_main:u_main|TG68KdotC_Kernel:u_cpu|TG68K_ALU:ALU|result_di.  Seed 1.
+# SEED.  2026-10-08, same netlist seed 1: -0.207 tilemap vram_l -> rom1_addr (band, untouched).  Seed 3.
+# SEED.  2026-10-08, same netlist seed 3: slack -0.211  -0.313 gx_esc056:g_esc056.u_esc|esc_cpu:u_cpu|x_key[5]  -> gx_esc056:g_esc056.u_esc|esc_c.  Seed 5.
+# SEED.  2026-10-08, 94727eaf netlist: seeds 4 10 12 9 8 1 3 all missed (-0.058 .. -0.697,
+# a different untouched path each time).  Seed 5 MET: worst core path +0.092 (tilemap
+# vram_h -> rom1_addr), rbf a67648c7.
+set_global_assignment -name SEED 5
 
 # No MISTER_FB here.  Gokujou Parodius is horizontal (MAME rotate=0), so
 # nothing rotates, so there is no DDR framebuffer and the FB_* ports are tied

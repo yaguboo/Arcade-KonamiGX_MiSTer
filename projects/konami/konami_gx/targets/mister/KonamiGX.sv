@@ -306,7 +306,14 @@ always @(posedge clk_sys) begin
 	ioctl_dl_d     <= ioctl_download;
 	mra_status_set <= 1'b0;
 	if (ioctl_dl_d && !ioctl_download && mra_status_seen && !mra_status_done) begin
-		mra_status_set  <= 1'b1;
+		// Only when NO saved settings were loaded.  MiSTer loads <setname>.CFG
+		// into status BEFORE the ROM download, and status_set makes Main replace
+		// all 128 bits with status_in (Main_MiSTer user_io.cpp
+		// check_status_change) -- so pushing the .mra defaults unconditionally
+		// overwrote every saved OSD setting on every load ("settings do not
+		// save", reported 2026-10-07).  A saved file has some bit of [127:1]
+		// set; a fresh load has none.  [0] is the reset bit Main pulses.
+		mra_status_set  <= ~|status[127:1];
 		mra_status_done <= 1'b1;
 	end
 end
